@@ -1,141 +1,168 @@
-Index:
-1) NODE MCU as a SERVER
-2) ThingSpeak Code
-3) Bluetooth Sensor
-4) GPS Interfacing with NODEMCU
 
-
-# NODE MCU as a SERVER
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 
-const char* ssid = "your_SSID";
-const char* password = "your_PASSWORD";
+/* Put your SSID & Password */
+const char* ssid = "NodeMCU";  // Enter SSID here
+const char* password = "12345678";  //Enter Password here
+
+/* Put IP Address details */
+IPAddress local_ip(192,168,1,1);
+IPAddress gateway(192,168,1,1);
+IPAddress subnet(255,255,255,0);
 
 ESP8266WebServer server(80);
-void handleRoot() {
-  server.send(200, "text/plain", "Hello from NodeMCU!");
-}
+
+uint8_t LED1pin = D7;
+bool LED1status = LOW;
+
+uint8_t LED2pin = D6;
+bool LED2status = LOW;
+
 void setup() {
   Serial.begin(115200);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-     }
-  Serial.println("Connected to WiFi");
-  server.on("/", handleRoot);
+  pinMode(LED1pin, OUTPUT);
+  pinMode(LED2pin, OUTPUT);
+
+  WiFi.softAP(ssid, password);
+  WiFi.softAPConfig(local_ip, gateway, subnet);
+  delay(100);
+  
+  server.on("/", handle_OnConnect);
+  server.on("/led1on", handle_led1on);
+  server.on("/led1off", handle_led1off);
+  server.on("/led2on", handle_led2on);
+  server.on("/led2off", handle_led2off);
+  server.onNotFound(handle_NotFound);
+  
   server.begin();
-  Serial.println("Server started");
+  Serial.println("HTTP server started");
 }
 void loop() {
   server.handleClient();
+  if(LED1status)
+  {digitalWrite(LED1pin, HIGH);}
+  else
+  {digitalWrite(LED1pin, LOW);}
+  
+  if(LED2status)
+  {digitalWrite(LED2pin, HIGH);}
+  else
+  {digitalWrite(LED2pin, LOW);}
+}
+
+void handle_OnConnect() {
+  LED1status = LOW;
+  LED2status = LOW;
+  Serial.println("GPIO7 Status: OFF | GPIO6 Status: OFF");
+  server.send(200, "text/html", SendHTML(LED1status,LED2status)); 
+}
+
+void handle_led1on() {
+  LED1status = HIGH;
+  Serial.println("GPIO7 Status: ON");
+  server.send(200, "text/html", SendHTML(true,LED2status)); 
+}
+
+void handle_led1off() {
+  LED1status = LOW;
+  Serial.println("GPIO7 Status: OFF");
+  server.send(200, "text/html", SendHTML(false,LED2status)); 
+}
+
+void handle_led2on() {
+  LED2status = HIGH;
+  Serial.println("GPIO6 Status: ON");
+  server.send(200, "text/html", SendHTML(LED1status,true)); 
+}
+
+void handle_led2off() {
+  LED2status = LOW;
+  Serial.println("GPIO6 Status: OFF");
+  server.send(200, "text/html", SendHTML(LED1status,false)); 
+}
+
+void handle_NotFound(){
+  server.send(404, "text/plain", "Not found");
+}
+
+String SendHTML(uint8_t led1stat,uint8_t led2stat){
+  String ptr = "<!DOCTYPE html> <html>\n";
+  ptr +="<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
+  ptr +="<title>LED Control</title>\n";
+  ptr +="<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
+  ptr +="body{margin-top: 50px;} h1 {color: #444444;margin: 50px auto 30px;} h3 {color: #444444;margin-bottom: 50px;}\n";
+  ptr +=".button {display: block;width: 80px;background-color: #1abc9c;border: none;color: white;padding: 13px 30px;text-decoration: none;font-size: 25px;margin: 0px auto 35px;cursor: pointer;border-radius: 4px;}\n";
+  ptr +=".button-on {background-color: #1abc9c;}\n";
+  ptr +=".button-on:active {background-color: #16a085;}\n";
+  ptr +=".button-off {background-color: #34495e;}\n";
+  ptr +=".button-off:active {background-color: #2c3e50;}\n";
+  ptr +="p {font-size: 14px;color: #888;margin-bottom: 10px;}\n";
+  ptr +="</style>\n";
+  ptr +="</head>\n";
+  ptr +="<body>\n";
+  ptr +="<h1>ESP8266 Web Server</h1>\n";
+  ptr +="<h3>Using Access Point(AP) Mode</h3>\n";
+  
+   if(led1stat)
+  {ptr +="<p>LED1 Status: ON</p><a class=\"button button-off\" href=\"/led1off\">OFF</a>\n";}
+  else
+  {ptr +="<p>LED1 Status: OFF</p><a class=\"button button-on\" href=\"/led1on\">ON</a>\n";}
+
+  if(led2stat)
+  {ptr +="<p>LED2 Status: ON</p><a class=\"button button-off\" href=\"/led2off\">OFF</a>\n";}
+  else
+  {ptr +="<p>LED2 Status: OFF</p><a class=\"button button-on\" href=\"/led2on\">ON</a>\n";}
+
+  ptr +="</body>\n";
+  ptr +="</html>\n";
+  return ptr;
 }
 
 -------------------****************-----------------
 
-# ThingSpeak Code
-#include <ESP8266WiFi.h>
-#include <ThingSpeak.h>
 
-// Replace with your Wi-Fi credentials
-const char* ssid = "your_SSID";
-const char* password = "your_PASSWORD";
+org 0h
+ljmp 200h
+org 0bh
+ljmp isr
+reti
+org 100h
+isr:
+cpl P1.1
+mov TH0, #0FFh
+mov TL0, #04h
+setb TR0
+reti
+org 200h
+main:
+mov P1, #00h
+mov IE, #82h
+mov TMOD, #01h
+reset:
+mov TH0, #0FFh
+mov TL0, #04h
+setb TR0
+end
 
-// Replace with your ThingSpeak channel details and write API key
-unsigned long channelID = your_Channel_ID;
-const char* writeAPIKey = "your_write_API_key";
 
-// Analog input pin for temperature sensor
-const int temperaturePin = A0;
+------------------------*************************-------------------------
 
-WiFiClient client;
-void setup() {
-  Serial.begin(115200);
 
-  // Connect to Wi-Fi network
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-  }
-  Serial.println("Connected to WiFi");
-
-  // Initialize ThingSpeak client
-  ThingSpeak.begin(client);
-}
-void loop() {
-  // Read temperature sensor value
-  int sensorValue = analogRead(temperaturePin);
-  float temperature = (sensorValue / 1024.0) * 330.0;
-
-  // Send temperature data to ThingSpeak
-  ThingSpeak.writeField(channelID, 1, temperature, writeAPIKey);
-
-  Serial.print("Temperature: ");
-  Serial.print(temperature);
-  Serial.println(" degrees Celsius");
-
-  // Wait for 10 seconds before uploading again
-  delay(10000);
-}
-
-----------------------**************--------------------
-
-# Bluetooth Sensor
-#include <SoftwareSerial.h>
-
-// Replace with your Bluetooth module pins
-const int BT_TX_PIN = 2;
-const int BT_RX_PIN = 3;
-
-SoftwareSerial bluetooth(BT_RX_PIN, BT_TX_PIN); // RX, TX
-
-void setup() {
-  Serial.begin(115200);
-
-  // Initialize Bluetooth Serial connection
-  bluetooth.begin(9600);
-}
-void loop() {
-  // Send data to Bluetooth module
-  bluetooth.println("Hello, world!");
-
-  // Wait for incoming data from Bluetooth module
-  while (bluetooth.available()) {
-    char incomingData = bluetooth.read();
-    Serial.print(incomingData);
-  }
-
-  delay(1000); // Wait for 1 second before sending again
-}
-
------------------**************-------------------
-
-# GPS Interfacing with NODEMCU
-#include <SoftwareSerial.h>
-
-// Replace with your GPS module pins
-const int GPS_TX_PIN = 2;
-const int GPS_RX_PIN = 3;
-
-SoftwareSerial gpsSerial(GPS_RX_PIN, GPS_TX_PIN); // RX, TX
-
-void setup() {
-  Serial.begin(115200);
-  gpsSerial.begin(9600);
-
-  // Configure GPS module
-  gpsSerial.println("$PMTK251,9600*17"); // Set baud rate to 9600
-  gpsSerial.println("$PMTK300,1000,0,0,0,0*1C"); // Set update rate to 1Hz
-}
-void loop() {
-  // Read incoming GPS data
-  while (gpsSerial.available()) {
-    char incomingData = gpsSerial.read();
-    Serial.print(incomingData);
-  }
-
-  delay(1000); // Wait for 1 second before reading again
-}
+org oh
+mov P0,#00h
+test:
+	setb P0.1
+	call timer
+	clr P0.1
+	call timer
+	sjmp test
+timer:
+	mov TMOD,#01h
+	mov TH0,#04h
+	mov TL0,#04h
+	setb TR0
+	jnb TF0,$
+	clr TR0
+	ret
+end
